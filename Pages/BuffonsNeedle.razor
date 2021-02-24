@@ -1,0 +1,101 @@
+﻿@page "/buffon"
+@using Plotly.Blazor.LayoutLib
+@using Plotly.Blazor.Traces.ScatterLib
+@using System.Diagnostics
+<h3>BuffonsNeedle</h3>
+<EditForm Model="settings" OnValidSubmit="RunReplications">
+    <div>
+        <label>Iterations: <InputNumber @bind-Value="settings.MonteCarlo.Iterations" /></label>
+        <label>Replications: <InputNumber @bind-Value="settings.MonteCarlo.Replications" /></label>
+    </div>
+
+    <div>
+        <label>Needle Length: <InputNumber @bind-Value="settings.NeedleLength" /></label>
+        <label>Line Gap: <InputNumber @bind-Value="settings.LineGap" /></label>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Run</button>
+</EditForm>
+
+<button class="btn btn-danger" @onclick="@(() => cancellationToken = true)">Stop</button>
+<button class="btn btn-danger" @onclick="@(() => chart.Clear())">Clear</button>
+
+<p>Actual Pi value: @lastPi</p>
+
+<PlotlyChart @bind-Config="config"
+             @bind-Layout="layout"
+             @bind-Data="data"
+             @ref="chart" />
+
+@code {
+    PlotlyChart chart;
+    Config config = new Config();
+    Layout layout = new Layout();
+    bool cancellationToken = false;
+    double lastPi;
+    BuffonsNeedleSettings settings = new BuffonsNeedleSettings();
+
+    IList<ITrace> data = new List<ITrace>
+    {
+        new Scatter
+        {
+            Name = "Pi Calculation",
+            Mode = ModeFlag.Lines,
+            X = new List<object>{},
+            Y = new List<object>{}
+        }
+    };
+
+    private async Task AddTrace()
+    {
+        await chart.AddTrace(new Scatter
+        {
+            Name = "Pi Calculation",
+            Mode = ModeFlag.Lines,
+            X = new List<object> { },
+            Y = new List<object> { }
+        });
+    }
+
+    private async Task RunReplications()
+    {
+        if (!(chart.Data.FirstOrDefault() is Scatter scatter)) await AddTrace();
+
+        cancellationToken = false;
+        var rep = 1;
+        while (!cancellationToken && rep <= settings.MonteCarlo.Replications)
+        {
+            var currentPi = CalculateBuffon(settings.MonteCarlo.Iterations);
+            var pis = (chart.Data[0] as Scatter).Y;
+            foreach (var pi in pis)
+            {
+                currentPi += (double)pi;
+            }
+
+            lastPi = pis.Count >= 1 ? currentPi / (pis.Count + 1) : currentPi;
+            await chart.ExtendTrace(rep, lastPi, 0);
+            ++rep;
+        }
+
+    }
+
+    private double CalculateBuffon(int iterations)
+    {
+        var rnd = new Random();
+        var crossCount = 0;
+
+        for (var i = 0; i < iterations; i++)
+        {
+            var x = rnd.NextDouble() * settings.LineGap;
+            var angle = rnd.NextDouble() * 180;
+
+            var xLen = Math.Sin(angle) * settings.NeedleLength;
+            if (Math.Abs(xLen) >= settings.LineGap - x)
+            {
+                ++crossCount;
+            }
+        }
+
+        return (2 * settings.NeedleLength) / (settings.LineGap * ((double)crossCount / iterations));
+    }
+}
