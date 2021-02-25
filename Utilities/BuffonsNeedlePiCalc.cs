@@ -2,27 +2,44 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 
 namespace MonteCarlo_Blazor.Utilities
 {
     public class BuffonsNeedlePiCalc
     {
-        public IEnumerable<double> GuessPi(BuffonsNeedleSettings settings)
+        public BuffonsNeedleSettings Settings { get; set; }
+        public BuffonsNeedlePiCalc(BuffonsNeedleSettings settings)
         {
-            var mc = new MonteCarlo<double>();
-            return mc.RunReplications(() => BuffonThrow(settings), settings.MonteCarlo)
-                .Select(mcRes => mcRes.Result);
+            Settings = settings;
         }
 
-        private bool BuffonThrow(BuffonsNeedleSettings settings)
+        public IEnumerable<MonteCarloResult<double>> GuessPi()
+        {
+            var mcReplicationsResults = MonteCarlo.RunReplications(MonteCarloRun, Settings.MonteCarlo);
+            foreach (var result in mcReplicationsResults)
+            {
+                yield return result;
+            }
+        }
+
+        private double MonteCarloRun(int iterations)
         {
             var rnd = new Random();
-            var x = rnd.NextDouble() * settings.LineGap;
-            var angle = rnd.NextDouble() * 180;
+            var crossCount = 0;
 
-            var xLen = Math.Sin(angle) * settings.NeedleLength;
-            return (Math.Abs(xLen) >= settings.LineGap - x);
+            for (var i = 0; i < iterations; i++)
+            {
+                var x = rnd.NextDouble() * Settings.LineGap;
+                var angle = rnd.NextDouble() * 180;
+
+                var xLen = Math.Sin(angle) * Settings.NeedleLength;
+                if (Math.Abs(xLen) >= Settings.LineGap - x)
+                {
+                    ++crossCount;
+                }
+            }
+
+            return (2 * Settings.NeedleLength) / (Settings.LineGap * ((double)crossCount / iterations));
         }
     }
 }
