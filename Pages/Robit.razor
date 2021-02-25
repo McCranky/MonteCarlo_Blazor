@@ -1,0 +1,91 @@
+﻿@page "/robit"
+@using Plotly.Blazor.Traces.ScatterLib
+@using Plotly.Blazor.LayoutLib
+@using MonteCarlo_Blazor.Utilities
+
+<h3>Robit</h3>
+
+<EditForm Model="settings" OnValidSubmit="RunReplications">
+    <div>
+        <label>Iterations: <InputNumber @bind-Value="settings.MonteCarlo.Iterations" /></label>
+        <label>Replications: <InputNumber @bind-Value="settings.MonteCarlo.Replications" /></label>
+    </div>
+
+    <div>
+        <label>X Nodes: <InputNumber @bind-Value="settings.XNodes" /></label>
+        <label>Y Nodes: <InputNumber @bind-Value="settings.YNodes" /></label>
+        <label>K Steps: <InputNumber @bind-Value="settings.KSteps" /></label>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Run</button>
+</EditForm>
+
+<div class="mt-3">
+    <button class="btn btn-danger mr-1" @onclick="@(() => settings.MonteCarlo.CancellationToken = true)" disabled="@settings.MonteCarlo.CancellationToken">Stop</button>
+    <button class="btn btn-warning" @onclick="@Clear" disabled="@(!settings.MonteCarlo.CancellationToken)">Clear</button>
+</div>
+
+<p class="text-info mt-2">Average steps: @averageSteps</p>
+
+<PlotlyChart @bind-Config="config"
+             @bind-Layout="layout"
+             @bind-Data="data"
+             @ref="chart" />
+
+
+@code {
+    RobitSettings settings = new RobitSettings();
+    PlotlyChart chart;
+    Config config = new Config();
+    Layout layout = new Layout
+    {
+        Title = new Title { Text = "Robit path" },
+        YAxis = new List<YAxis> { new YAxis { Title = new Plotly.Blazor.LayoutLib.YAxisLib.Title { Text = "Steps count" } } },
+        XAxis = new List<XAxis> { new XAxis { Title = new Plotly.Blazor.LayoutLib.XAxisLib.Title { Text = "Replication" } } }
+    };
+    double averageSteps;
+
+    IList<ITrace> data = new List<ITrace>
+{
+        new Scatter
+        {
+            Name = "Robit path",
+            Mode = ModeFlag.Lines,
+            X = new List<object>{},
+            Y = new List<object>{}
+        }
+    };
+
+    private async Task Clear()
+    {
+        await chart.Clear();
+        averageSteps = 0;
+    }
+
+    private async Task AddTrace()
+    {
+        await chart.AddTrace(new Scatter
+        {
+            Name = "Robit path",
+            Mode = ModeFlag.Lines,
+            X = new List<object> { },
+            Y = new List<object> { }
+        });
+    }
+
+    private async Task RunReplications()
+    {
+        if (!(chart.Data.FirstOrDefault() is Scatter scatter)) await AddTrace();
+
+        settings.MonteCarlo.CancellationToken = false;
+
+        var robitCalc = new RobitStepsCalc(settings);
+        var steps = robitCalc.CalculateSteps();
+
+        foreach (var step in steps)
+        {
+            averageSteps = step.Result;
+            await chart.ExtendTrace(step.Replication, step.Result, 0);
+        }
+    }
+}
