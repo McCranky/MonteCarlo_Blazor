@@ -7,14 +7,25 @@
 
 <EditForm Model="settings" OnValidSubmit="RunReplications">
     <div>
-        <label>Iterations: <InputNumber @bind-Value="settings.MonteCarlo.Iterations" /></label>
         <label>Replications: <InputNumber @bind-Value="settings.MonteCarlo.Replications" /></label>
+        <label>Skip First: <InputNumber @bind-Value="settings.MonteCarlo.SkipFirstXResults" /></label>
+        <label>Write Every: <InputNumber @bind-Value="settings.MonteCarlo.WriteEveryXValue" /></label>
     </div>
 
     <div>
         <label>X Nodes: <InputNumber @bind-Value="settings.XNodes" /></label>
         <label>Y Nodes: <InputNumber @bind-Value="settings.YNodes" /></label>
+    </div>
+    <div>
+        <label>Start X: <InputNumber @bind-Value="settings.StartX" /></label>
+        <label>Start Y: <InputNumber @bind-Value="settings.StartY" /></label>
+    </div>
+    <div>
         <label>K Steps: <InputNumber @bind-Value="settings.KSteps" /></label>
+    </div>
+    <div>
+        <label>Allow Backward Move: <InputCheckbox @bind-Value="settings.AllowBackwardMove" /></label>
+        <label>Better stretegy: <InputCheckbox @bind-Value="settings.BetterStrategy"/></label>
     </div>
 
     <button type="submit" class="btn btn-primary">Run</button>
@@ -26,47 +37,93 @@
 </div>
 
 <p class="text-info mt-2">Average steps: @averageSteps</p>
+<p class="text-info">Average probability: @(averageProbability * 100)%</p>
 
-<PlotlyChart @bind-Config="config"
-             @bind-Layout="layout"
-             @bind-Data="data"
-             @ref="chart" />
+<div class="m-3">
+    <PlotlyChart @bind-Config="configSteps"
+                 @bind-Layout="layoutSteps"
+                 @bind-Data="dataSteps"
+                 @ref="chartSteps" />
+</div>
+
+<div class="m-3">
+    <PlotlyChart @bind-Config="configProbability"
+                 @bind-Layout="layoutProbability"
+                 @bind-Data="dataProbability"
+                 @ref="chartProbability" />
+</div>
 
 
 @code {
     RobitSettings settings = new RobitSettings();
-    PlotlyChart chart;
-    Config config = new Config();
-    Layout layout = new Layout
-    {
-        Title = new Title { Text = "Robit path" },
-        YAxis = new List<YAxis> { new YAxis { Title = new Plotly.Blazor.LayoutLib.YAxisLib.Title { Text = "Steps count" } } },
-        XAxis = new List<XAxis> { new XAxis { Title = new Plotly.Blazor.LayoutLib.XAxisLib.Title { Text = "Replication" } } }
-    };
-    double averageSteps;
 
-    IList<ITrace> data = new List<ITrace>
-{
+    #region StepsChart
+    PlotlyChart chartSteps;
+    Config configSteps = new Config();
+    Layout layoutSteps = new Layout
+    {
+        Title = new Title { Text = "Robit steps" },
+        YAxis = new List<YAxis> { new YAxis { Title = new Plotly.Blazor.LayoutLib.YAxisLib.Title { Text = "Steps count" } } },
+        XAxis = new List<XAxis> { new XAxis { Title = new Plotly.Blazor.LayoutLib.XAxisLib.Title { Text = "Replication" } } },
+        AutoSize = true
+    };
+    IList<ITrace> dataSteps = new List<ITrace>
+    {
         new Scatter
         {
-            Name = "Robit path",
+            Name = "Steps",
             Mode = ModeFlag.Lines,
             X = new List<object>{},
             Y = new List<object>{}
         }
     };
+    #endregion
+
+    #region ProbabilityChart
+    PlotlyChart chartProbability;
+    Config configProbability = new Config();
+    Layout layoutProbability = new Layout
+    {
+        Title = new Title { Text = "K Steps Probability" },
+        YAxis = new List<YAxis> { new YAxis { Title = new Plotly.Blazor.LayoutLib.YAxisLib.Title { Text = "Percentage %" } } },
+        XAxis = new List<XAxis> { new XAxis { Title = new Plotly.Blazor.LayoutLib.XAxisLib.Title { Text = "Replication" } } }
+    };
+    IList<ITrace> dataProbability = new List<ITrace>
+    {
+        new Scatter
+        {
+            Name = "Probability",
+            Mode = ModeFlag.Lines,
+            X = new List<object>{},
+            Y = new List<object>{}
+        }
+    };
+    #endregion
+
+    double averageSteps;
+    double averageProbability;
 
     private async Task Clear()
     {
-        await chart.Clear();
+        await chartSteps.Clear();
+        await chartProbability.Clear();
         averageSteps = 0;
+        averageProbability = 0;
     }
 
-    private async Task AddTrace()
+    private async Task InitTraces()
     {
-        await chart.AddTrace(new Scatter
+        await chartSteps.AddTrace(new Scatter
         {
-            Name = "Robit path",
+            Name = "Steps",
+            Mode = ModeFlag.Lines,
+            X = new List<object> { },
+            Y = new List<object> { }
+        });
+
+        await chartProbability.AddTrace(new Scatter
+        {
+            Name = "Probability",
             Mode = ModeFlag.Lines,
             X = new List<object> { },
             Y = new List<object> { }
@@ -75,17 +132,31 @@
 
     private async Task RunReplications()
     {
-        if (!(chart.Data.FirstOrDefault() is Scatter scatter)) await AddTrace();
+        if (chartSteps.Data.Count == 0) await InitTraces();
 
         settings.MonteCarlo.CancellationToken = false;
+        var rnd = new Random();
+        var robitCarlo = new RobitCarlo(settings, rnd.Next(), rnd.Next(), rnd.Next());
+        var rep = 1;
+        var totalSteps = 0;
+        var totalOverSteps = 0;
 
-        var robitCalc = new RobitStepsCalc(settings);
-        var steps = robitCalc.CalculateSteps();
-
-        foreach (var step in steps)
+        foreach (var result in robitCarlo.RunReplications())
         {
-            averageSteps = step.Result;
-            await chart.ExtendTrace(step.Replication, step.Result, 0);
+            totalSteps += result;
+            averageSteps = totalSteps / (double)rep;
+            if (result > settings.KSteps)
+            {
+                ++totalOverSteps;
+            }
+            averageProbability = totalOverSteps / (double)rep;
+
+            if (rep > settings.MonteCarlo.SkipFirstXResults && rep % settings.MonteCarlo.WriteEveryXValue == 0)
+            {
+                await chartSteps.ExtendTrace(rep, averageSteps, 0);
+                await chartProbability.ExtendTrace(rep, averageProbability, 0);
+            }
+            ++rep;
         }
     }
 }

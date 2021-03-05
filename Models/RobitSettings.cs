@@ -22,5 +22,7 @@ namespace MonteCarlo_Blazor.Models
         [Required]
         [Range(1, int.MaxValue)]
         public int StartY { get; set; }
+        public bool BetterStrategy { get; set; }
+        public bool AllowBackwardMove { get; set; }
     }
 }
