@@ -6,21 +6,21 @@ namespace MonteCarlo_Blazor.Utilities
     public abstract class MonteCarlo<TResult>
     {
         protected MonteCarloSettings Settings { get; set; }
-        protected virtual void BeforeSimulation() { }
+        protected virtual void BeforeReplication() { }
         public IEnumerable<TResult> RunReplications()
         {
             for (int i = 0; i < Settings.Replications && !Settings.CancellationToken; i++)
             {
-                BeforeSimulation();
+                BeforeReplication();
 
                 var result = DoReplication();
 
-                AfterSimulation();
+                AfterReplication();
 
                 yield return result;
             }
         }
-        protected virtual void AfterSimulation() { }
+        protected virtual void AfterReplication() { }
         protected abstract TResult DoReplication();
     }
 }

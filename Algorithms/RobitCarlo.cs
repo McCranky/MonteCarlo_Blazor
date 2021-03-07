@@ -25,7 +25,7 @@ namespace MonteCarlo_Blazor.Utilities
             Console.WriteLine($"Seed 3: {seed3}");
         }
 
-        protected override void BeforeSimulation()
+        protected override void BeforeReplication()
         {
             _matrix = new bool[RobitSettings.YNodes, RobitSettings.XNodes];
         }
